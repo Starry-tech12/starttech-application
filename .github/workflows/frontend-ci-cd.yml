@@ -20,7 +20,7 @@ jobs:
           node-version: 20
 
       - run: npm install
-      - run: npm test -- --watchAll=false
+      - run: cd frontend && npx vitest run
       - run: npm run build
 
       - uses: aws-actions/configure-aws-credentials@v4
