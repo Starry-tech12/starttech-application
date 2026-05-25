@@ -1,45 +1,63 @@
-name: Frontend CI/CD
+name: Frontend CI/CD Pipeline
 
 on:
   push:
-    branches:
-      - main
-    paths:
-      - 'frontend/**'
+    branches: [ "master", "main" ]
 
 jobs:
-  deploy:
+  build-test-deploy:
     runs-on: ubuntu-latest
 
-    defaults:
-      run:
-        working-directory: frontend
-
     steps:
-      - name: Checkout
+      # 1. Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Node
+      # 2. Setup Node
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
 
-      - name: Install Dependencies
+      # 3. Install dependencies
+      - name: Install dependencies
         run: npm install
+        working-directory: frontend
 
-      - name: Run Tests
-        run: npm test -- --watchAll=false
+      # 4. Run tests
+      - name: Run tests (Vitest)
+        run: npm run test
+        working-directory: frontend
 
-      - name: Build React App
+      # 5. Build React app
+      - name: Build frontend
         run: npm run build
+        working-directory: frontend
 
-      - name: AWS Configure
+      # 6. Security audit (non-blocking)
+      - name: NPM Audit
+        run: npm audit --audit-level=moderate || true
+        working-directory: frontend
+
+name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+aws-secret-access-key: ${{ secrets.AWS_SECRET_KEY }}
           aws-region: us-east-1
 
+      # 8. Deploy to S3
       - name: Deploy to S3
+        run: aws s3 sync dist/ s3://${{ secrets.S3_BUCKET_NAME }} --delete
+        working-directory: frontend
+
+      # 9. Invalidate CloudFront cache
+      - name: Invalidate CloudFront
         run: |
-          aws s3 sync build/ s3://${{ secrets.S3_BUCKET }} --delete
+          aws cloudfront create-invalidation \
+            --distribution-id ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }} \
+            --paths "/*"
+
+            permissions:
+  id-token: write
+  contents: read

@@ -1,39 +1,49 @@
-name: Backend CI/CD
+name: Backend CI/CD Pipeline (Simple Deploy)
 
 on:
   push:
-    branches:
-      - main
+    branches: [ "main", "master" ]
 
 jobs:
-  backend-deploy:
+  build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Configure AWS
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+
+      - name: Run tests
+        run: go test ./...
+        working-directory: backend
+
+      - name: Build binary
+        run: go build -o app .
+        working-directory: backend
+
+      - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
+         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+aws-secret-access-key: ${{ secrets.AWS_SECRET_KEY }}
+          aws-region: us-east-1
 
-      - name: Login to ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Build Docker image
+      - name: Deploy to EC2 (simple SSH deploy)
         run: |
-          docker build -t backend ./backend
+          echo "${{ secrets.EC2_KEY }}" > key.pem
+          chmod 400 key.pem
 
-      - name: Tag image
-        run: |
-          docker tag backend:latest \
-          127259106152.dkr.ecr.us-east-1.amazonaws.com/backend:latest
+          scp -o StrictHostKeyChecking=no -i key.pem backend/app ec2-user@${{ secrets.EC2_IP }}:/home/ec2-user/app
 
-      - name: Push image to ECR
-        run: |
-          docker push \
-          127259106152.dkr.ecr.us-east-1.amazonaws.com/backend:latest
+          ssh -o StrictHostKeyChecking=no -i key.pem ec2-user@${{ secrets.EC2_IP }} << 'EOF'
+            pkill app || true
+            nohup ./app > app.log 2>&1 &
+          EOF
+          
+          permissions:
+  id-token: write
+  contents: read
