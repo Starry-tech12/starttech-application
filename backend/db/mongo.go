@@ -10,28 +10,31 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-var Client *mongo.Client
+var MongoClient *mongo.Client
 
 func ConnectMongo() {
 	uri := os.Getenv("MONGO_URI")
 
 	if uri == "" {
-		log.Fatal("MONGO_URI not set")
+		log.Fatal("MONGO_URI is empty")
 	}
+
+	clientOptions := options.Client().ApplyURI(uri)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	client, err := mongo.Connect(ctx, options.Client().ApplyURI(uri))
+	client, err := mongo.Connect(ctx, clientOptions)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("Mongo connection error:", err)
 	}
 
 	err = client.Ping(ctx, nil)
 	if err != nil {
-		log.Fatal("MongoDB connection failed:", err)
+		log.Fatal("Mongo ping error:", err)
 	}
 
-	Client = client
-	log.Println("✅ MongoDB Connected Successfully")
+	MongoClient = client
+
+	log.Println("MongoDB connected successfully")
 }
